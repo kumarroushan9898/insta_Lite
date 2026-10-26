@@ -6,10 +6,14 @@ async function main(){
     data: users,
     skipDuplicates: true,
   });
-  await prisma.post.createMany({
-    data: posts,
-    skipDuplicates: true,
-  });
+  const postData = posts.map((post, index) => ({
+  ...post,
+  authorId: Math.floor(index / 2) + 1,
+}));
+
+await prisma.post.createMany({
+  data: postData,
+});
 }
 
 
