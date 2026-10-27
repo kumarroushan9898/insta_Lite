@@ -57,14 +57,32 @@ async function getAllUsers(req, res) {
     error: "order must be asc or desc",
   });
   }
+  const isPrivateQuery = req.query.isPrivate;
+const search = req.query.search;
+
+let isPrivate;
+
+if (isPrivateQuery !== undefined) {
+  if (!["true", "false"].includes(isPrivateQuery)) {
+    return res.status(400).json({
+      error: "isPrivate must be true or false",
+    });
+  }
+
+  isPrivate = isPrivateQuery === "true";
+}
 
   try {
     const result = await usersService.getAllUsers(
   page,
   limit,
   sortBy,
-  order
-  );
+  order,
+  {
+    isPrivate,
+    search,
+  }
+);
     return res.status(200).json(result);
   } catch (error) {
     console.error(error);
