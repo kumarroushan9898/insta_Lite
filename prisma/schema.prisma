@@ -1,7 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
 generator client {
   provider = "prisma-client-js"
 }
@@ -21,7 +20,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   posts     Post[]
-  like      Like[]
+  likes     Like[]
 }
 
 model Post {
@@ -31,20 +30,23 @@ model Post {
   location  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  like      Like[]
 
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [username], onDelete: Cascade)
+  authorId  Int
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
+  likes     Like[]
+
+  @@index([authorId])
 }
 
 model Like {
-  userId    String
+  userId    Int
   postId    Int
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [username], onDelete: Cascade)
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@id([userId, postId])
+  @@index([postId])
 }

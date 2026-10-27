@@ -1,5 +1,5 @@
-
 const prisma = require("../database/db");
+const { buildMeta } = require("../utils/pagination");
 
 async function createPost(postData) {
   return await prisma.post.create({
@@ -12,7 +12,6 @@ async function createPost(postData) {
   });
 }
 
-
 async function getAllPosts(
   page = 1,
   limit = 10,
@@ -21,7 +20,6 @@ async function getAllPosts(
   filters = {}
 ) {
   const skip = (page - 1) * limit;
-
   const where = {};
 
   if (filters.location) {
@@ -50,38 +48,65 @@ async function getAllPosts(
     }
   }
 
+  // Sort by likes count with tie-breaker createdAt desc, or standard field sort
+  let orderBy;
+  if (sortBy === "likes") {
+    orderBy = [
+      { likes: { _count: order } },
+      { createdAt: "desc" },
+    ];
+  } else {
+    orderBy = {
+      [sortBy]: order,
+    };
+  }
+
   const [posts, total] = await prisma.$transaction([
     prisma.post.findMany({
       where,
       include: {
-        author: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+            fullname: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+          },
+        },
       },
       skip,
       take: limit,
-      orderBy: {
-        [sortBy]: order,
-      },
+      orderBy,
     }),
     prisma.post.count({ where }),
   ]);
 
   return {
     data: posts,
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
+    meta: buildMeta(page, limit, total),
   };
 }
-
 
 async function getPostById(id) {
   return await prisma.post.findUnique({
     where: { id: Number(id) },
     include: {
-      author: true,
+      author: {
+        select: {
+          id: true,
+          username: true,
+          fullname: true,
+        },
+      },
+      _count: {
+        select: {
+          likes: true,
+        },
+      },
     },
   });
 }

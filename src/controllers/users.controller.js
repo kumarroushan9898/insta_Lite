@@ -1,5 +1,5 @@
-
 const usersService = require("../services/users.service");
+const { parsePagination } = require("../utils/pagination");
 
 async function createUser(req, res) {
   try {
@@ -26,63 +26,67 @@ async function createUser(req, res) {
 }
 
 async function getAllUsers(req, res) {
-  const page = Number(req.query.page ?? 1);
-  const requestedLimit = Number(req.query.limit ?? 10);
-
-  if (
-    !Number.isInteger(page) ||
-    page <= 0 ||
-    !Number.isInteger(requestedLimit) ||
-    requestedLimit <= 0
-  ) {
-    return res.status(400).json({
-      error: "page and limit must be positive integers",
-    });
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
   }
 
-  const limit = Math.min(requestedLimit, 50);
+  const { page, limit } = pagination;
   const sortBy = req.query.sortBy ?? "createdAt";
   const order = req.query.order ?? "desc";
 
   const allowedSortFields = ["createdAt", "username", "fullname"];
 
   if (!allowedSortFields.includes(sortBy)) {
-  return res.status(400).json({
-    error: "sortBy must be one of: createdAt, username, fullname",
-  });
-  }
-
-  if (!["asc", "desc"].includes(order)) {
-  return res.status(400).json({
-    error: "order must be asc or desc",
-  });
-  }
-  const isPrivateQuery = req.query.isPrivate;
-const search = req.query.search;
-
-let isPrivate;
-
-if (isPrivateQuery !== undefined) {
-  if (!["true", "false"].includes(isPrivateQuery)) {
     return res.status(400).json({
-      error: "isPrivate must be true or false",
+      error: "sortBy must be one of: createdAt, username, fullname",
     });
   }
 
-  isPrivate = isPrivateQuery === "true";
-}
+  if (!["asc", "desc"].includes(order)) {
+    return res.status(400).json({
+      error: "order must be asc or desc",
+    });
+  }
+
+  const isPrivateQuery = req.query.isPrivate;
+  let isPrivate;
+
+  if (isPrivateQuery !== undefined) {
+    if (!["true", "false"].includes(isPrivateQuery)) {
+      return res.status(400).json({
+        error: "isPrivate must be true or false",
+      });
+    }
+    isPrivate = isPrivateQuery === "true";
+  }
+
+  const hasPostsQuery = req.query.hasPosts;
+  let hasPosts;
+
+  if (hasPostsQuery !== undefined) {
+    if (!["true", "false"].includes(hasPostsQuery)) {
+      return res.status(400).json({
+        error: "hasPosts must be true or false",
+      });
+    }
+    hasPosts = hasPostsQuery === "true";
+  }
+
+  const search = req.query.search;
 
   try {
     const result = await usersService.getAllUsers(
-  page,
-  limit,
-  sortBy,
-  order,
-  {
-    isPrivate,
-    search,
-  }
-);
+      page,
+      limit,
+      sortBy,
+      order,
+      {
+        isPrivate,
+        search,
+        hasPosts,
+      }
+    );
     return res.status(200).json(result);
   } catch (error) {
     console.error(error);
@@ -149,10 +153,64 @@ async function deleteUser(req, res) {
   }
 }
 
+async function getUserPosts(req, res) {
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+
+  const { page, limit } = pagination;
+
+  try {
+    const result = await usersService.getUserPosts(
+      req.params.id,
+      page,
+      limit
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+async function getLikedPosts(req, res) {
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
+  }
+
+  const { page, limit } = pagination;
+
+  try {
+    const result = await usersService.getLikedPosts(
+      req.params.id,
+      page,
+      limit
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
 module.exports = {
   createUser,
   getAllUsers,
   getUserById,
   updateUser,
-  deleteUser
+  deleteUser,
+  getUserPosts,
+  getLikedPosts,
 };

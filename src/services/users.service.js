@@ -1,5 +1,5 @@
-
 const prisma = require("../database/db.js");
+const { buildMeta } = require("../utils/pagination");
 
 async function createUser(userData) {
   return await prisma.user.create({
@@ -20,11 +20,16 @@ async function getAllUsers(
   filters = {}
 ) {
   const skip = (page - 1) * limit;
-
   const where = {};
 
   if (filters.isPrivate !== undefined) {
     where.isPrivate = filters.isPrivate;
+  }
+
+  if (filters.hasPosts === true) {
+    where.posts = { some: {} };
+  } else if (filters.hasPosts === false) {
+    where.posts = { none: {} };
   }
 
   if (filters.search) {
@@ -58,18 +63,21 @@ async function getAllUsers(
 
   return {
     data: users,
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
+    meta: buildMeta(page, limit, total),
   };
 }
 
 async function getUserById(id) {
   return await prisma.user.findUnique({
     where: { id: Number(id) },
+    include: {
+      _count: {
+        select: {
+          posts: true,
+          likes: true,
+        },
+      },
+    },
   });
 }
 
@@ -90,10 +98,99 @@ async function deleteUser(id) {
   });
 }
 
+async function getUserPosts(userId, page = 1, limit = 10) {
+  const user = await prisma.user.findUnique({
+    where: { id: Number(userId) },
+  });
+
+  if (!user) {
+    return null;
+  }
+
+  const skip = (page - 1) * limit;
+  const where = { authorId: Number(userId) };
+
+  const [posts, total] = await prisma.$transaction([
+    prisma.post.findMany({
+      where,
+      include: {
+        _count: {
+          select: {
+            likes: true,
+          },
+        },
+      },
+      skip,
+      take: limit,
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+    prisma.post.count({ where }),
+  ]);
+
+  return {
+    data: posts,
+    meta: buildMeta(page, limit, total),
+  };
+}
+
+async function getLikedPosts(userId, page = 1, limit = 10) {
+  const user = await prisma.user.findUnique({
+    where: { id: Number(userId) },
+  });
+
+  if (!user) {
+    return null;
+  }
+
+  const skip = (page - 1) * limit;
+  const where = {
+    likes: {
+      some: {
+        userId: Number(userId),
+      },
+    },
+  };
+
+  const [posts, total] = await prisma.$transaction([
+    prisma.post.findMany({
+      where,
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            fullname: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+          },
+        },
+      },
+      skip,
+      take: limit,
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+    prisma.post.count({ where }),
+  ]);
+
+  return {
+    data: posts,
+    meta: buildMeta(page, limit, total),
+  };
+}
+
 module.exports = {
   createUser,
   getAllUsers,
   getUserById,
   updateUser,
-  deleteUser
+  deleteUser,
+  getUserPosts,
+  getLikedPosts,
 };

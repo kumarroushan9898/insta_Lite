@@ -1,16 +1,23 @@
-
+const prisma = require("../database/db");
 const postsService = require("../services/posts.service");
+const { parsePagination } = require("../utils/pagination");
 
 async function createPost(req, res) {
   try {
     const { imageUrl, caption, location, authorId } = req.body;
 
-    if (!imageUrl) {
-      return res.status(400).json({ error: "imageUrl is required" });
+    if (!imageUrl || !authorId) {
+      return res.status(400).json({
+        error: "imageUrl and authorId are required",
+      });
     }
 
-    if (!authorId || !Number.isInteger(Number(authorId))) {
-      return res.status(400).json({ error: "valid authorId is required" });
+    const user = await prisma.user.findUnique({
+      where: { id: Number(authorId) },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
     const post = await postsService.createPost({
@@ -22,33 +29,28 @@ async function createPost(req, res) {
 
     return res.status(201).json(post);
   } catch (error) {
+    if (error.code === "P2003") {
+      return res.status(404).json({ error: "User not found" });
+    }
     console.error(error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
 
 async function getAllPosts(req, res) {
-  const page = Number(req.query.page ?? 1);
-  const requestedLimit = Number(req.query.limit ?? 10);
-
-  if (
-    !Number.isInteger(page) ||
-    page <= 0 ||
-    !Number.isInteger(requestedLimit) ||
-    requestedLimit <= 0
-  ) {
-    return res.status(400).json({
-      error: "page and limit must be positive integers",
-    });
+  const pagination = parsePagination(req.query);
+  if (pagination.error) {
+    return res.status(400).json({ error: pagination.error });
   }
 
-  const limit = Math.min(requestedLimit, 50);
+  const { page, limit } = pagination;
   const sortBy = req.query.sortBy ?? "createdAt";
   const order = req.query.order ?? "desc";
 
-  if (!["createdAt", "updatedAt"].includes(sortBy)) {
+  const allowedSortFields = ["createdAt", "updatedAt", "likes"];
+  if (!allowedSortFields.includes(sortBy)) {
     return res.status(400).json({
-      error: "sortBy must be one of: createdAt, updatedAt",
+      error: "sortBy must be one of: createdAt, updatedAt, likes",
     });
   }
 
@@ -116,6 +118,7 @@ async function updatePost(req, res) {
     const data = {};
     const { caption, location } = req.body;
 
+    // authorId is not editable - silently ignored if sent
     if (caption !== undefined) data.caption = caption;
     if (location !== undefined) data.location = location;
 
