@@ -26,12 +26,51 @@ async function createUser(req, res) {
 }
 
 async function getAllUsers(req, res) {
+  const page = Number(req.query.page ?? 1);
+  const requestedLimit = Number(req.query.limit ?? 10);
+
+  if (
+    !Number.isInteger(page) ||
+    page <= 0 ||
+    !Number.isInteger(requestedLimit) ||
+    requestedLimit <= 0
+  ) {
+    return res.status(400).json({
+      error: "page and limit must be positive integers",
+    });
+  }
+
+  const limit = Math.min(requestedLimit, 50);
+  const sortBy = req.query.sortBy ?? "createdAt";
+  const order = req.query.order ?? "desc";
+
+  const allowedSortFields = ["createdAt", "username", "fullname"];
+
+  if (!allowedSortFields.includes(sortBy)) {
+  return res.status(400).json({
+    error: "sortBy must be one of: createdAt, username, fullname",
+  });
+  }
+
+  if (!["asc", "desc"].includes(order)) {
+  return res.status(400).json({
+    error: "order must be asc or desc",
+  });
+  }
+
   try {
-    const users = await usersService.getAllUsers();
-    return res.status(200).json(users);
+    const result = await usersService.getAllUsers(
+  page,
+  limit,
+  sortBy,
+  order
+  );
+    return res.status(200).json(result);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({
+      error: "Internal server error",
+    });
   }
 }
 
